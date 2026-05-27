@@ -743,7 +743,7 @@ class Wpvivid_Google_drive extends WPvivid_Remote
                 WPvivid_taskmanager::wpvivid_reset_backup_retry_times($task_id);
             }
             $ref=$this->check_token($client, $service);
-            if($ref['result']=!WPVIVID_SUCCESS)
+            if($ref['result']!==WPVIVID_SUCCESS)
             {
                 return $ref;
             }
@@ -965,7 +965,7 @@ class Wpvivid_Google_drive extends WPvivid_Remote
             $message = 'A exception ('.get_class($e).') occurred '.esc_html($e->getMessage()).' (Code: '.$e->getCode().', line '.$e->getLine().' in '.$e->getFile().') ';
             $wpvivid_plugin->wpvivid_log->WriteLog('Upload InvalidArgumentException, '.$message.', refresh token','notice');
             $ref=$this->check_token($client, $service);
-            if($ref['result']=!WPVIVID_SUCCESS)
+            if($ref['result']!==WPVIVID_SUCCESS)
             {
                 $wpvivid_plugin->wpvivid_log->WriteLog('refresh token failed, error: '.json_encode($ref),'notice');
                 return $ref;
