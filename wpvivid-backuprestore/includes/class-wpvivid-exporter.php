@@ -1878,7 +1878,16 @@ class WPvivid_Exporter
 
     private function wxr_cdata( $str )
     {
-        if ( ! seems_utf8( $str ) ) {
+        $str = (string) $str;
+
+        // Use the current WordPress API, with a fallback for older versions.
+        if ( function_exists( 'wp_is_valid_utf8' ) ) {
+            $is_utf8 = wp_is_valid_utf8( $str );
+        } else {
+            $is_utf8 = seems_utf8( $str );
+        }
+
+        if ( ! $is_utf8 ) {
             if ( function_exists( 'mb_convert_encoding' ) ) {
                 $str = mb_convert_encoding( $str, 'UTF-8', 'ISO-8859-1' );
             } else {

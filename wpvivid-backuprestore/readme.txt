@@ -4,7 +4,7 @@ Tags: duplicate, clone, migrate, staging, backup
 Requires at least: 4.5
 Tested up to: 7.1.4
 Requires PHP: 5.6
-Stable tag: 0.9.137
+Stable tag: 0.9.139
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -101,6 +101,10 @@ Yes, absolutely. Whenever you need help, start a thread on the [support forum](h
 Yes, we do. Here are the guides for [migrating your site to a new host](https://wpvivid.com/get-started-transfer-site.html), [creating a manual backup](https://wpvivid.com/get-started-create-a-manual-backup.html), [restoring your site from a backup](https://wpvivid.com/get-started-restore-site.html), and more on [our docs page](https://wpvivid.com/documents).
 
 == Changelog ==
+= 0.9.139 =
+- Fixed: An issue that prevented version 0.9.138 from being properly installed.
+= 0.9.138 =
+- Fixed two vulnerabilities in the plugin code.
 = 0.9.137 =
 - Fixed some security issues in the plugin code. Special thanks to Karthik Ramakrishnan, Qi Qin and WPScan for reporting and assisting with the fixes.
 = 0.9.136 =
@@ -225,5 +229,5 @@ Yes, we do. Here are the guides for [migrating your site to a new host](https://
 [See historical changelog entries](https://raw.githubusercontent.com/wpvivid-backup/wpvivid-backuprestore/main/CHANGELOG_LEGACY.md).
 
 == Upgrade Notice ==
-= 0.9.137 =
-- Fixed some security issues in the plugin code. Special thanks to Karthik Ramakrishnan, Qi Qin and WPScan for reporting and assisting with the fixes.
+= 0.9.139 =
+- Fixed: An issue that prevented version 0.9.138 from being properly installed.

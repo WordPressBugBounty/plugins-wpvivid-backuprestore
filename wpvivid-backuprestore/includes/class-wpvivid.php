@@ -4774,11 +4774,8 @@ class WPvivid
             die();
         };
         try {
-            $dir = WPvivid_Setting::get_option('wpvivid_local_setting');
-
-            if (!isset($dir['path'])) {
-                $dir = WPvivid_Setting::set_default_local_option();
-            }
+            // Resolve stored settings through the validated backup directory getter.
+            $dir = array('path' => WPvivid_Setting::get_backupdir());
 
             if (!is_dir(WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $dir['path'])) {
                 @mkdir(WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $dir['path'], 0777, true);
@@ -5081,11 +5078,11 @@ class WPvivid
         }
         catch (Exception $e)
         {
-            $ret['log_path'] = $log_dir = WPvivid_tools::GetSaveLogFolder();
-            $dir = WPvivid_Setting::get_backupdir();
-            $ret['old_files_path'] = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR . WPVIVID_DEFAULT_ROLLBACK_DIR;
-            $dir = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $dir;
-            $ret['junk_path'] = $dir;
+            // Keep the settings page available when stored directories are invalid.
+            // Do not resolve the same invalid directory again inside the error handler.
+            $ret['log_path'] = '';
+            $ret['old_files_path'] = '';
+            $ret['junk_path'] = '';
             $ret['sum_size'] = '0';
             $ret['log_dir_size'] = '0';
             $ret['backup_cache_size'] = '0';
@@ -6475,7 +6472,17 @@ class WPvivid
         }
 
         $log=new WPvivid_Log();
-        $dir=$log->GetSaveLogFolder();
+        try
+        {
+            $dir=$log->GetSaveLogFolder();
+        }
+        catch (Exception $error)
+        {
+            // Listing logs must not prevent the settings page from loading.
+            // Do not read, create or fall back to another directory on failure.
+            $ret['log_directory_error'] = true;
+            return $ret;
+        }
         $files=array();
         $handler=opendir($dir);
         $regex='#^wpvivid.*_log.txt#';

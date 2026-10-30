@@ -726,6 +726,8 @@ class WPvivid_Staging_Copy_DB
         $new_db=$this->get_db_instance(true);
         $old_db=$this->get_db_instance();
 
+        $wpvivid_plugin->staging->authorize_staging_table($this->task->get_id(), $new_table_name);
+
         $query = $old_db->prepare( 'SHOW TABLES LIKE %s', $new_db->esc_like( $new_table_name ) );
 
         if ( $new_db->get_var( $query ) == $new_table_name )

@@ -1064,6 +1064,17 @@ class WPvivid_Admin
                 $dir = WPvivid_Setting::set_default_local_option();
             }
 
+            // Refuse invalid stored paths before deleting or rewriting protection files.
+            try
+            {
+                WPvivid_Setting::validate_child_directory(WP_CONTENT_DIR, $dir['path']);
+                WPvivid_Setting::validate_content_directory($dir['path'] . '/wpvivid_log/error');
+            }
+            catch (Exception $error)
+            {
+                return;
+            }
+
             $wpvivid_backup_dir_htaccess = WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'].DIRECTORY_SEPARATOR.'.htaccess';
             $wpvivid_backup_log_htaccess = WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'].DIRECTORY_SEPARATOR.'wpvivid_log'.DIRECTORY_SEPARATOR.'.htaccess';
             $wpvivid_backup_error_log_htaccess = WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'].DIRECTORY_SEPARATOR.'wpvivid_log'.DIRECTORY_SEPARATOR.'error'.'/.htaccess';
@@ -1120,6 +1131,12 @@ class WPvivid_Admin
         global $wpvivid_plugin;
 
         $loglist=$wpvivid_plugin->get_log_list_ex();
+        if (!empty($loglist['log_directory_error']))
+        {
+            echo '<div class="notice notice-error"><p>';
+            esc_html_e('The log directory is invalid or unavailable. Please restore valid log directory settings before continuing.', 'wpvivid-backuprestore');
+            echo '</p></div>';
+        }
         $remoteslist=WPvivid_Setting::get_all_remote_options();
         $default_remote_storage='';
         foreach ($remoteslist['remote_selected'] as $value)
