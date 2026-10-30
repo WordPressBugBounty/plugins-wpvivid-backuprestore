@@ -1566,8 +1566,8 @@ class WPvivid_Staging_Free
                 die();
             }
 
-            $path = sanitize_text_field($_POST['path']);
-            $path = sanitize_file_name($path);
+            $validated_directory = $this->get_validated_staging_directory();
+            $path = $validated_directory['path'];
 
             if(!isset($_POST['table_prefix']) || empty($_POST['table_prefix']) || !is_string($_POST['table_prefix']))
             {
@@ -1578,22 +1578,6 @@ class WPvivid_Staging_Free
             }
 
             $table_prefix = sanitize_text_field($_POST['table_prefix']);
-
-            if (isset($_POST['root_dir']) && $_POST['root_dir'] == 0)
-            {
-                $path = untrailingslashit(ABSPATH) . DIRECTORY_SEPARATOR. $path;
-            }
-            else if(isset($_POST['root_dir']) && $_POST['root_dir'] == 1)
-            {
-                $path = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $path;
-            }
-            else
-            {
-                $ret['result'] = 'failed';
-                $ret['error'] = 'We are not able to authenticate the staging directory, please contact us.';
-                echo wp_json_encode($ret);
-                die();
-            }
 
             if (file_exists($path))
             {
@@ -1698,22 +1682,10 @@ class WPvivid_Staging_Free
                 die();
             }
 
-            $path = sanitize_text_field($_POST['path']);
-            $src_path = untrailingslashit(ABSPATH);
+            $validated_directory = $this->get_validated_staging_directory();
 
-            if(isset($_POST['root_dir'])&&$_POST['root_dir']==0)
-            {
-                $des_path = untrailingslashit(ABSPATH) . '/' . $path;
-            }
-            else if (isset($_POST['root_dir'])&&$_POST['root_dir']==1)
-            {
-                $des_path = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $path;
-            }
-            else
-            {
-                $test_dir = 'wpvividstg_testfolder';
-                $des_path = untrailingslashit($path) . '/' . $test_dir;
-            }
+            $src_path = untrailingslashit(ABSPATH);
+            $des_path = $validated_directory['path'];
 
             $mk_res = mkdir($des_path,0755,true);
             if (!$mk_res)
@@ -2233,15 +2205,17 @@ class WPvivid_Staging_Free
 
                     $option['options'] = $this->set_staging_option();
 
+                    $validated_directory = $this->get_validated_staging_directory();
+
                     $src_path = untrailingslashit(ABSPATH);
-                    $path = sanitize_text_field($_POST['path']);
+                    $path = $validated_directory['name'];
                     if(isset($_POST['root_dir'])&&$_POST['root_dir']==0)
                     {
                         $url_path=$path;
 
                         $new_site_url = untrailingslashit($this->get_database_site_url()). '/' . $url_path;
                         $new_home_url = untrailingslashit($this->get_database_home_url()). '/' . $url_path;
-                        $des_path = untrailingslashit(ABSPATH) . '/' . $path;
+                        $des_path = $validated_directory['path'];
                     }
                     else
                     {
@@ -2250,7 +2224,7 @@ class WPvivid_Staging_Free
                         $new_site_url = untrailingslashit($this->get_database_site_url()). '/' . $url_path;
                         $new_home_url = untrailingslashit($this->get_database_home_url()). '/' . $url_path;
 
-                        $des_path = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $path;
+                        $des_path = $validated_directory['path'];
                     }
 
                     $option['data']['path']['src_path'] = $src_path;
@@ -2301,10 +2275,21 @@ class WPvivid_Staging_Free
         }
         catch (Exception $error)
         {
+            if ($task === false)
+            {
+                $this->end_shutdown_function = true;
+
+                echo wp_json_encode(array(
+                    'result' => 'failed',
+                    'error' => $error->getMessage()
+                ));
+                die();
+            }
+
             $message = 'An Error has occurred. class:'.get_class($error).';msg:'.$error->getMessage().';code:'.$error->getCode().';line:'.$error->getLine().';in_file:'.$error->getFile().';';
             error_log($message);
-            if($task!==false)
-                $task->finished_task_with_error($message);
+
+            $task->finished_task_with_error($message);
             $this->log->WriteLog($message,'error');
         }
 
@@ -2889,5 +2874,34 @@ class WPvivid_Staging_Free
         $json['data']['wpvivid_staging_history'] = $wpvivid_staging_history;
         $json['data']['wpvivid_push_staging_history'] = $wpvivid_push_staging_history;
         return $json;
+    }
+
+    /**
+     * Validate the requested staging directory.
+     *
+     * @return array
+     * @throws Exception
+     */
+    private function get_validated_staging_directory()
+    {
+        if (!isset($_POST['path']) || !is_string($_POST['path']))
+        {
+            throw new Exception('A valid site path is required.');
+        }
+
+        if (!isset($_POST['root_dir']) ||
+            !is_string($_POST['root_dir']) ||
+            !in_array($_POST['root_dir'], array('0', '1'), true))
+        {
+            throw new Exception('Invalid staging base directory.');
+        }
+
+        $name = wp_unslash($_POST['path']);
+        $base = $_POST['root_dir'] === '0' ? ABSPATH : WP_CONTENT_DIR;
+
+        return array(
+            'name' => $name,
+            'path' => WPvivid_Setting::validate_child_directory($base, $name)
+        );
     }
 }

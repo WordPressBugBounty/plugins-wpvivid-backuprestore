@@ -312,9 +312,40 @@ class WPvivid
 
 	public function init_pclzip_tmp_folder()
     {
-        if (!defined('PCLZIP_TEMPORARY_DIR')) {
-            $backupdir=WPvivid_Setting::get_backupdir();
-            define( 'PCLZIP_TEMPORARY_DIR', WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$backupdir.DIRECTORY_SEPARATOR );
+        if (defined('PCLZIP_TEMPORARY_DIR'))
+        {
+            return;
+        }
+
+        try
+        {
+            $backupdir = WPvivid_Setting::get_backupdir();
+            define('PCLZIP_TEMPORARY_DIR', WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $backupdir . DIRECTORY_SEPARATOR);
+        }
+        catch (Exception $error)
+        {
+            $message = 'WPvivid: The backup directory is unavailable. '
+                . $error->getMessage()
+                . ' Please check the local backup folder setting '
+                . 'and directory permissions.';
+
+            $show_notice = function () use ($message)
+            {
+                if (!current_user_can('manage_options'))
+                {
+                    return;
+                }
+
+                echo '<div class="notice notice-error"><p>'
+                    . esc_html($message)
+                    . '</p></div>';
+            };
+
+            add_action('admin_notices', $show_notice);
+            add_action('network_admin_notices', $show_notice);
+
+            // Do not configure an invalid temporary directory.
+            return;
         }
     }
 
@@ -5598,6 +5629,9 @@ class WPvivid
         die();
     }
 
+    /**
+     * @throws \Exception When a backup directory is invalid or cannot be moved.
+     */
     public function wpvivid_set_general_setting($setting_data, $setting, $options)
     {
         $setting_data['wpvivid_common_setting']['backup_params'] = $setting['backup_params'];
@@ -5656,16 +5690,29 @@ class WPvivid
             $setting_data['wpvivid_email_setting']['email_enable'] = $setting['email_enable'];
         }
 
-        $setting['path']=esc_attr($setting['path']);
-        $setting_data['wpvivid_local_setting']['path'] = $setting['path'];
-
-        if($options['options']['wpvivid_local_setting']['path'] !== $setting['path'])
+        $new_name = $setting['path'];
+        $new_path = WPvivid_Setting::validate_child_directory(
+            WP_CONTENT_DIR,
+            $new_name
+        );
+        $old_name = $options['options']['wpvivid_local_setting']['path'];
+        if ($old_name !== $new_name)
         {
-            if(file_exists(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$options['options']['wpvivid_local_setting']['path']))
+            $old_path = WPvivid_Setting::validate_child_directory(
+                WP_CONTENT_DIR,
+                $old_name
+            );
+
+            // Move the old directory only when the new directory does not exist.
+            if (!file_exists($new_path) && file_exists($old_path))
             {
-                @rename(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$options['options']['wpvivid_local_setting']['path'], WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$setting['path']);
+                if (!@rename($old_path, $new_path))
+                {
+                    throw new Exception('Failed to move the backup directory.');
+                }
             }
         }
+        $setting_data['wpvivid_local_setting']['path'] = $new_name;
 
         $setting_data['wpvivid_local_setting']['save_local'] = $options['options']['wpvivid_local_setting']['save_local'];
 
@@ -5827,7 +5874,6 @@ class WPvivid
             return $ret;
         }
 
-        //
         if(!isset($data['restore_max_execution_time']))
         {
             $ret['error']=__('The value of \'PHP scripts execution timeout for restore\' can\'t be empty.', 'wpvivid-backuprestore');
@@ -6002,18 +6048,22 @@ class WPvivid
             }
         }
 
-        //
-
-        if(!isset($data['path']))
+        if (!isset($data['path']) || !is_string($data['path']))
         {
             $ret['error']=__('The local storage path is required.', 'wpvivid-backuprestore');
+            return $ret;
         }
 
-        $data['path']=sanitize_text_field($data['path']);
-
-        if(empty($data['path']))
+        try
         {
-            $ret['error']=__('The local storage path is required.', 'wpvivid-backuprestore');
+            WPvivid_Setting::validate_child_directory(
+                WP_CONTENT_DIR,
+                $data['path']
+            );
+        }
+        catch (Exception $error)
+        {
+            $ret['error'] = $error->getMessage();
             return $ret;
         }
 

@@ -2259,22 +2259,113 @@ class WPvivid_Export_Import
         {
             die();
         }
-        $options['test_form'] =true;
-        $options['action'] ='wpvivid_upload_import_files';
-        $options['test_type'] = false;
-        $options['ext'] = 'zip';
-        $options['type'] = 'application/zip';
-        add_filter('upload_dir', array($this, 'upload_import_dir'));
 
-        $file_name=basename(sanitize_text_field($_POST['name']));
-        $validate = wp_check_filetype( $file_name );
-        if ( $validate['type'] == false )
+        if (!isset($_POST['name']) ||
+            !is_string($_POST['name']) ||
+            !isset($_FILES['async-upload']) ||
+            !is_array($_FILES['async-upload']))
         {
-            echo wp_json_encode(array('result'=>WPVIVID_FAILED, 'error' => 'File type is not allowed.'));
+            echo wp_json_encode(array(
+                'result' => WPVIVID_FAILED,
+                'error' => 'Invalid upload data.'
+            ));
             die();
         }
 
-        $status = wp_handle_upload($_FILES['async-upload'],$options);
+        $upload = $_FILES['async-upload'];
+
+        if (!isset($upload['name'], $upload['tmp_name'], $upload['error']) ||
+            !is_string($upload['name']) ||
+            !is_string($upload['tmp_name']) ||
+            !is_int($upload['error']) ||
+            $upload['error'] !== UPLOAD_ERR_OK ||
+            !is_uploaded_file($upload['tmp_name']))
+        {
+            echo wp_json_encode(array(
+                'result' => WPVIVID_FAILED,
+                'error' => 'Invalid uploaded file.'
+            ));
+            die();
+        }
+
+        $file_name = wp_unslash($_POST['name']);
+        $uploaded_name = $upload['name'];
+
+        // The final file name must always be a valid ZIP name.
+        if (preg_match('/\A[a-zA-Z0-9._~-]+\.zip\z/i', $file_name) !== 1 ||
+            sanitize_file_name($file_name) !== $file_name)
+        {
+            echo wp_json_encode(array(
+                'result' => WPVIVID_FAILED,
+                'error' => 'Invalid import ZIP file name.'
+            ));
+            die();
+        }
+
+        // Plupload may name uploaded chunks "blob".
+        $is_blob_chunk = $uploaded_name === 'blob' &&
+            isset($_POST['chunks'], $_POST['chunk']);
+
+        // Other uploaded names must still pass the ZIP name validation.
+        if (!$is_blob_chunk &&
+            (preg_match('/\A[a-zA-Z0-9._~-]+\.zip\z/i', $uploaded_name) !== 1 ||
+                sanitize_file_name($uploaded_name) !== $uploaded_name))
+        {
+            echo wp_json_encode(array(
+                'result' => WPVIVID_FAILED,
+                'error' => 'Invalid uploaded ZIP file name.'
+            ));
+            die();
+        }
+
+        // Validate chunk metadata before any file is written.
+        if (isset($_POST['chunks']) || isset($_POST['chunk']))
+        {
+            if (!isset($_POST['chunks'], $_POST['chunk']) ||
+                !is_string($_POST['chunks']) ||
+                !is_string($_POST['chunk']) ||
+                !ctype_digit($_POST['chunks']) ||
+                !ctype_digit($_POST['chunk']))
+            {
+                echo wp_json_encode(array(
+                    'result' => WPVIVID_FAILED,
+                    'error' => 'Invalid chunk data.'
+                ));
+                die();
+            }
+
+            $chunks = (int) $_POST['chunks'];
+            $chunk = (int) $_POST['chunk'];
+
+            if ($chunks < 1 || $chunks > 100000 ||
+                $chunk < 0 || $chunk >= $chunks)
+            {
+                echo wp_json_encode(array(
+                    'result' => WPVIVID_FAILED,
+                    'error' => 'Invalid chunk range.'
+                ));
+                die();
+            }
+        }
+
+        // Only normalize "blob" after all chunk metadata has passed validation.
+        if ($is_blob_chunk)
+        {
+            $_FILES['async-upload']['name'] = $file_name;
+        }
+
+        $options = array(
+            'test_form' => true,
+            'action' => 'wpvivid_upload_import_files',
+            'test_type' => true,
+            'mimes' => array(
+                'zip' => 'application/zip'
+            )
+        );
+
+        add_filter('upload_dir', array($this, 'upload_import_dir'));
+
+        $status = wp_handle_upload($_FILES['async-upload'], $options);
 
         remove_filter('upload_dir', array($this, 'upload_import_dir'));
         if (isset($status['error']))
@@ -2285,13 +2376,34 @@ class WPvivid_Export_Import
 
         if (isset($_POST['chunks']) && isset($_POST['chunk']))
         {
-            $chunks=sanitize_key($_POST['chunks']);
-            $chunk=sanitize_key($_POST['chunk']);
+            $chunks = (int) $_POST['chunks'];
+            $chunk = (int) $_POST['chunk'];
             $path=WP_CONTENT_DIR.DIRECTORY_SEPARATOR.WPvivid_Setting::get_backupdir().DIRECTORY_SEPARATOR.WPVIVID_IMPORT_EXPORT_DIR.DIRECTORY_SEPARATOR;
-            rename($status['file'],$path.$file_name.'_'.$chunk.'.tmp');
-            $status['file'] = $path.$file_name.'_'.$chunk.'.tmp';
+            $chunk_file = $path . $file_name . '_' . $chunk . '.tmp';
+
+            if (is_link($chunk_file) ||
+                !@rename($status['file'], $chunk_file))
+            {
+                @wp_delete_file($status['file']);
+
+                echo wp_json_encode(array(
+                    'result' => WPVIVID_FAILED,
+                    'error' => 'Failed to save the uploaded chunk.'
+                ));
+                die();
+            }
+
+            $status['file'] = $chunk_file;
             if($chunk == $chunks-1)
             {
+                if (is_link($path . $file_name))
+                {
+                    echo wp_json_encode(array(
+                        'result' => WPVIVID_FAILED,
+                        'error' => 'Invalid import target.'
+                    ));
+                    die();
+                }
                 $file_handle = fopen($path.$file_name, 'wb');
                 if ($file_handle)
                 {

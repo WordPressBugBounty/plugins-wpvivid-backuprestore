@@ -1879,7 +1879,26 @@ class WPvivid_Exporter
     private function wxr_cdata( $str )
     {
         if ( ! seems_utf8( $str ) ) {
-            $str = utf8_encode( $str );
+            if ( function_exists( 'mb_convert_encoding' ) ) {
+                $str = mb_convert_encoding( $str, 'UTF-8', 'ISO-8859-1' );
+            } else {
+                // Convert ISO-8859-1 to UTF-8 without requiring extensions.
+                $converted = '';
+                $length = strlen( $str );
+
+                for ( $i = 0; $i < $length; $i++ ) {
+                    $byte = ord( $str[$i] );
+
+                    if ( $byte < 128 ) {
+                        $converted .= $str[$i];
+                    } else {
+                        $converted .= chr( 192 | ( $byte >> 6 ) );
+                        $converted .= chr( 128 | ( $byte & 63 ) );
+                    }
+                }
+
+                $str = $converted;
+            }
         }
         // $str = ent2ncr(esc_html($str));
         $str = '<![CDATA[' . str_replace( ']]>', ']]]]><![CDATA[>', $str ) . ']]>';

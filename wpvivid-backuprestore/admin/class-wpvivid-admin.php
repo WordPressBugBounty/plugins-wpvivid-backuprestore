@@ -627,6 +627,30 @@ class WPvivid_Admin
 
     public function display()
     {
+        try
+        {
+            // Stop rendering this page if the backup directory is invalid.
+            WPvivid_Setting::get_backupdir();
+        }
+        catch (Exception $error)
+        {
+            echo '<div class="wrap">';
+            echo '<h1>'
+                . esc_html__('WPvivid Backup Plugin', 'wpvivid-backuprestore')
+                . '</h1>';
+
+            echo '<div class="notice notice-error"><p>'
+                . esc_html(
+                    'WPvivid: The backup directory is unavailable. '
+                    . $error->getMessage()
+                    . ' Please correct the local backup folder configuration.'
+                )
+                . '</p></div>';
+
+            echo '</div>';
+            return;
+        }
+
         include_once('partials/wpvivid-admin-display.php');
     }
 
@@ -964,7 +988,19 @@ class WPvivid_Admin
                         ?>
                         <div class="notice notice-error">
                             <p>
-                                WPvivid Backup Plugin has updated its bundled phpseclib library. Your current WPvivid Backup Pro version may not work correctly with this update, affecting SFTP, Auto Migration, and encrypted database backups and restores. Please update WPvivid Backup Pro to version <?php echo esc_html(WPVIVID_PHPSECLIB3_MIN_PRO_VERSION); ?> or later.
+                                <?php
+                                echo esc_html(
+                                    sprintf(
+                                        __(
+                                            '%1$s has updated its bundled phpseclib library. Your current %2$s version may not work correctly with this update, affecting SFTP, Auto Migration, and encrypted database backups and restores. Please update %2$s to version %3$s or later.',
+                                            'wpvivid-backuprestore'
+                                        ),
+                                        apply_filters('wpvivid_white_label_display', 'WPvivid Backup Plugin'),
+                                        apply_filters('wpvivid_white_label_display', 'WPvivid Backup Pro'),
+                                        WPVIVID_PHPSECLIB3_MIN_PRO_VERSION
+                                    )
+                                );
+                                ?>
                             </p>
                         </div>
                         <?php
@@ -998,9 +1034,11 @@ class WPvivid_Admin
 
         $message = sprintf(
             __(
-                'WPvivid Backup Plugin has updated its bundled phpseclib library. Your current WPvivid Backup Pro version may not work correctly with this update, affecting SFTP, Auto Migration, and encrypted database backups and restores. Please update WPvivid Backup Pro to version %s or later.',
+                '%1$s has updated its bundled phpseclib library. Your current %2$s version may not work correctly with this update, affecting SFTP, Auto Migration, and encrypted database backups and restores. Please update %2$s to version %3$s or later.',
                 'wpvivid-backuprestore'
             ),
+            apply_filters('wpvivid_white_label_display', 'WPvivid Backup Plugin'),
+            apply_filters('wpvivid_white_label_display', 'WPvivid Backup Pro'),
             WPVIVID_PHPSECLIB3_MIN_PRO_VERSION
         );
 

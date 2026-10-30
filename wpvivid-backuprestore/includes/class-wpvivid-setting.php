@@ -5,6 +5,66 @@ if (!defined('WPVIVID_PLUGIN_DIR')){
 }
 class WPvivid_Setting
 {
+    /**
+     * Validate a single directory name and resolve it under a trusted base.
+     *
+     * @throws \Exception If the directory name or resolved path is invalid.
+     */
+    public static function validate_child_directory($base_dir, $name)
+    {
+        if (!is_string($name) ||
+            $name === '' ||
+            $name === '.' ||
+            $name === '..' ||
+            preg_match('/[\x00-\x1F\x7F\/\\\\:]/', $name) ||
+            preg_match('/[. ]$/', $name) ||
+            sanitize_file_name($name) !== $name)
+        {
+            throw new Exception('Invalid directory name.');
+        }
+
+        $base = realpath($base_dir);
+        if ($base === false || !is_dir($base))
+        {
+            throw new Exception('The base directory does not exist.');
+        }
+
+        $target = $base . DIRECTORY_SEPARATOR . $name;
+
+        // Reject symbolic links, including broken links.
+        if (is_link($target))
+        {
+            throw new Exception('Symbolic links are not allowed for this directory.');
+        }
+
+        if (file_exists($target))
+        {
+            $resolved = realpath($target);
+            if ($resolved === false || !is_dir($resolved))
+            {
+                throw new Exception('The target is not a valid directory.');
+            }
+
+            $parent = wp_normalize_path(dirname($resolved));
+            $expected_parent = wp_normalize_path($base);
+
+            if (DIRECTORY_SEPARATOR === '\\')
+            {
+                $parent = strtolower($parent);
+                $expected_parent = strtolower($expected_parent);
+            }
+
+            if ($parent !== $expected_parent)
+            {
+                throw new Exception('The directory is outside the allowed location.');
+            }
+
+            $target = $resolved;
+        }
+
+        return $target;
+    }
+
     public static function init_option()
     {
         $ret=self::get_option('wpvivid_email_setting');
@@ -185,31 +245,61 @@ class WPvivid_Setting
         return $ret;
     }
 
+    /**
+     * Get the validated relative backup directory name.
+     *
+     * @return string
+     * @throws Exception
+     */
     public static function get_backupdir()
     {
-        $dir=self::get_option('wpvivid_local_setting');
+        $dir = self::get_option('wpvivid_local_setting');
 
-        if(!isset($dir['path']))
+        if (!is_array($dir) || !isset($dir['path']))
         {
-            $dir=self::set_default_local_option();
+            $dir = self::set_default_local_option();
         }
-        if(!is_dir(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path']))
+
+        $path = self::validate_child_directory(
+            WP_CONTENT_DIR,
+            $dir['path']
+        );
+
+        if (!is_dir($path))
         {
-            @mkdir(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'],0777,true);
-            //@fopen(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'].DIRECTORY_SEPARATOR.'index.html', 'x');
-            $tempfile=@fopen(WP_CONTENT_DIR.DIRECTORY_SEPARATOR.$dir['path'].DIRECTORY_SEPARATOR.'.htaccess', 'x');
-            if($tempfile)
+            if (!@mkdir($path, 0755, true) && !is_dir($path))
             {
-                //$text="deny from all";
-                $text="<IfModule mod_rewrite.c>\r\nRewriteEngine On\r\nRewriteRule .* - [F,L]\r\n</IfModule>";
-                fwrite($tempfile,$text );
-                fclose($tempfile);
-            }
-            else
-            {
-                return false;
+                throw new Exception('Failed to create the backup directory.');
             }
 
+            // Verify the created directory before writing into it.
+            $path = self::validate_child_directory(
+                WP_CONTENT_DIR,
+                $dir['path']
+            );
+
+            $tempfile = @fopen(
+                $path . DIRECTORY_SEPARATOR . '.htaccess',
+                'x'
+            );
+
+            if ($tempfile === false)
+            {
+                throw new Exception('Failed to protect the backup directory.');
+            }
+
+            $text = "<IfModule mod_rewrite.c>\r\n"
+                . "RewriteEngine On\r\n"
+                . "RewriteRule .* - [F,L]\r\n"
+                . "</IfModule>";
+
+            $written = fwrite($tempfile, $text);
+            fclose($tempfile);
+
+            if ($written === false || $written !== strlen($text))
+            {
+                throw new Exception('Failed to write backup directory protection.');
+            }
         }
 
         return $dir['path'];
