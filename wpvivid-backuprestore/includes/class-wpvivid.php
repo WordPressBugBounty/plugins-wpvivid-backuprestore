@@ -7259,13 +7259,13 @@ class WPvivid
     }
 
     public function wpvivid_get_remote_directory($out_of_date_remote){
-        $out_of_date=$this->_get_out_of_date_info();
+        $remote_options = WPvivid_Setting::get_remote_options();
         $out_of_date_remote='There is no path for remote storage, please set it up first.';
 
-        if($out_of_date['remote_options'] !== false)
+        if($remote_options !== false)
         {
             $out_of_date_remote_temp = array();
-            foreach ($out_of_date['remote_options'] as $value)
+            foreach ($remote_options as $value)
             {
                 $out_of_date_remote=apply_filters('wpvivid_get_out_of_date_remote',$out_of_date_remote, $value);
                 $value['type']=apply_filters('wpvivid_storage_provider_tran', $value['type']);

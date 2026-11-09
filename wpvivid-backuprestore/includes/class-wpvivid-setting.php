@@ -18,7 +18,7 @@ class WPvivid_Setting
             $name === '..' ||
             preg_match('/[\x00-\x1F\x7F\/\\\\:]/', $name) ||
             preg_match('/[. ]$/', $name) ||
-            sanitize_file_name($name) !== $name)
+            preg_match('/[\x00-\x1F\x7F\/\\\\:*?"<>|]/', $name))
         {
             throw new Exception('Invalid directory name.');
         }
@@ -84,7 +84,7 @@ class WPvivid_Setting
         foreach ($parts as $part)
         {
             if ($part === '' || $part === '.' || $part === '..' ||
-                preg_match('/[. ]$/', $part) || sanitize_file_name($part) !== $part)
+                preg_match('/[. ]$/', $part) || preg_match('/[\x00-\x1F\x7F\/\\\\:*?"<>|]/', $part))
             {
                 throw new Exception('Invalid log directory.');
             }
